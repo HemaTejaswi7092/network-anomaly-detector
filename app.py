@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,14 +12,12 @@ from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import os
 import warnings
 import random
 import time
 
 warnings.filterwarnings('ignore')
 
-# ─── PAGE CONFIG ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="NetGuard — Network Anomaly Detector",
     page_icon="🛡️",
@@ -26,24 +25,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ─── GLOBAL CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 :root {
     --bg-base:       #060a10;
     --bg-panel:      #0b1120;
     --bg-card:       #0f1828;
-    --bg-hover:      #131e30;
     --border:        #1a2d45;
     --border-bright: #1e3d5c;
     --green:         #00e5a0;
-    --green-dim:     #00b87d;
     --green-glow:    rgba(0,229,160,0.15);
     --red:           #ff3c5a;
-    --red-dim:       #cc2040;
-    --red-glow:      rgba(255,60,90,0.15);
     --orange:        #ff8c00;
     --blue:          #38b6ff;
     --purple:        #b44dff;
@@ -83,7 +77,6 @@ div[data-testid="metric-container"] > div > div > div {
     font-family: 'Orbitron', monospace !important;
     font-size: 1.6rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.05em;
 }
 div[data-testid="metric-container"] label {
     color: var(--text-secondary) !important;
@@ -120,7 +113,6 @@ div[data-testid="metric-container"] label {
     color: var(--green) !important;
     font-family: 'JetBrains Mono', monospace !important;
     font-size: 0.8rem !important;
-    letter-spacing: 0.06em;
     border-radius: 6px !important;
     padding: 8px 20px !important;
     transition: all 0.2s !important;
@@ -128,7 +120,6 @@ div[data-testid="metric-container"] label {
 .stButton > button:hover {
     background: var(--green-glow) !important;
     box-shadow: 0 0 16px rgba(0,229,160,0.3) !important;
-    transform: translateY(-1px) !important;
 }
 
 .stSelectbox > div > div {
@@ -216,6 +207,29 @@ hr { border-color: var(--border) !important; margin: 20px 0 !important; }
     animation: pulse-red 2s infinite;
 }
 
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s;
+}
+.stat-card .value {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--green);
+}
+.stat-card .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-top: 6px;
+}
+
 .status-dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
     background: var(--green); animation: blink 2s infinite; box-shadow: 0 0 6px var(--green);
@@ -236,7 +250,6 @@ hr { border-color: var(--border) !important; margin: 20px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── PLOT THEME ────────────────────────────────────────────────────────────────
 DARK_LAYOUT = dict(
     paper_bgcolor='#0b1120', plot_bgcolor='#060a10',
     font=dict(color='#7a95b8', family='JetBrains Mono'),
@@ -249,7 +262,7 @@ COLORS = {
     'PortScan': '#ff8c00', 'BruteForce': '#b44dff', 'Bot': '#38b6ff',
 }
 
-# ─── SIDEBAR ───────────────────────────────────────────────────────────────────
+# ── SIDEBAR ──
 with st.sidebar:
     st.markdown("""
     <div style='text-align:center; padding:24px 0 16px;'>
@@ -270,12 +283,6 @@ with st.sidebar:
     data_source = st.radio("", ["Use Demo Dataset", "Upload CSV File"], label_visibility="collapsed")
     if data_source == "Upload CSV File":
         uploaded_csv = st.file_uploader("Upload network traffic CSV", type=["csv"])
-        st.markdown("""
-        <div style='font-family:JetBrains Mono,monospace; font-size:0.68rem; color:#3d5570; margin-top:8px; line-height:1.6;'>
-        Requires a <span style='color:#7a95b8'>label</span> column with values:<br>
-        BENIGN · DDoS · PortScan · BruteForce · Bot
-        </div>
-        """, unsafe_allow_html=True)
     else:
         uploaded_csv = None
     st.markdown("---")
@@ -295,7 +302,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# ─── DATA GENERATION ───────────────────────────────────────────────────────────
+# ── DATA GENERATION ──
 @st.cache_data
 def generate_demo_dataset():
     np.random.seed(42)
@@ -353,7 +360,7 @@ def train_model(_df, n_estimators, test_split, depth):
     cm = confusion_matrix(y_test, y_pred)
     return model, le, acc, prec, rec, f1, fi, X_test, y_test, y_pred, y_proba, cm, feature_cols
 
-# ─── LOAD DATA ─────────────────────────────────────────────────────────────────
+# ── LOAD DATA ──
 with st.spinner("Initializing NetGuard detection engine..."):
     if uploaded_csv is not None:
         try:
@@ -388,7 +395,7 @@ benign     = int(label_counts.get('BENIGN', label_counts.get('benign', 0)))
 attacks    = total - benign
 threat_pct = attacks / total * 100
 
-# ─── HEADER ────────────────────────────────────────────────────────────────────
+# ── HEADER ──
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.markdown("""
@@ -421,17 +428,15 @@ with col_h2:
 
 st.markdown("---")
 
-# ─── THREAT BANNER ─────────────────────────────────────────────────────────────
 if threat_pct > 40:
     st.markdown(f'<div class="alert-critical">🚨 <strong>CRITICAL THREAT LEVEL</strong> — {threat_pct:.1f}% of traffic classified as malicious · Immediate incident response recommended <span style="float:right">● ELEVATED RISK</span></div>', unsafe_allow_html=True)
 elif threat_pct > 20:
     st.markdown(f'<div class="alert-high">⚠️ <strong>HIGH THREAT LEVEL</strong> — {threat_pct:.1f}% of traffic flagged as suspicious · Review live feed <span style="float:right">● MONITORING</span></div>', unsafe_allow_html=True)
 else:
-    st.markdown(f'<div class="alert-normal">✅ <strong>NORMAL OPERATIONS</strong> — {threat_pct:.1f}% threat level — System nominal <span style="float:right">● NOMINAL</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="alert-normal">✅ <strong>NORMAL OPERATIONS</strong> — {threat_pct:.1f}% threat level <span style="float:right">● NOMINAL</span></div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─── TABS ──────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "[ OVERVIEW ]", "[ LIVE DETECTOR ]", "[ MODEL INTEL ]",
     "[ TRAFFIC ANALYSIS ]", "[ TIMELINE ]", "[ ALERTS LOG ]",
@@ -451,7 +456,6 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
     col_l, col_r = st.columns(2)
-
     with col_l:
         color_list = [COLORS.get(l, '#888') for l in label_counts.index]
         fig_pie = go.Figure(go.Pie(
@@ -467,7 +471,6 @@ with tab1:
             **{k:v for k,v in DARK_LAYOUT.items() if k not in ['xaxis','yaxis']}, height=320,
         )
         st.plotly_chart(fig_pie, use_container_width=True)
-
     with col_r:
         attack_only = label_counts[label_counts.index != 'BENIGN']
         if len(attack_only):
@@ -488,7 +491,7 @@ with tab1:
     attack_types = [l for l in label_counts.index if l.upper() != 'BENIGN']
     if attack_types:
         rng = random.Random(int(time.time() // 30) if auto_refresh else 42)
-        protocols  = ['TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'FTP', 'SSH']
+        protocols = ['TCP','UDP','ICMP','HTTP','HTTPS','DNS','FTP','SSH']
 
         @st.cache_data(ttl=3600)
         def get_country(ip):
@@ -507,9 +510,24 @@ with tab1:
                 return 'Unknown'
             except:
                 return 'Unknown'
+
         for i in range(10):
             attack  = rng.choice(attack_types)
-            src_ip  = f"{rng.randint(1,223)}.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}"
+            real_ips = [
+                f"1.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"5.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"31.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"46.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"58.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"80.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"91.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"103.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"110.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"177.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"196.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+                f"200.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}",
+            ]
+            src_ip  = rng.choice(real_ips)
             dst_ip  = f"10.0.{rng.randint(1,10)}.{rng.randint(1,50)}"
             port    = rng.choice([80,443,22,21,3389,8080,53,445])
             proto   = rng.choice(protocols)
@@ -543,7 +561,6 @@ with tab1:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.markdown('<div class="ng-header">🔍 Real-Time Traffic Classifier</div>', unsafe_allow_html=True)
-
     st.markdown("**Quick Scenarios:**")
     preset_cols = st.columns(6)
     presets = {
@@ -612,6 +629,47 @@ with tab2:
     confidence = float(max(probs)) * 100
 
     st.markdown("---")
+
+    damage_info = {
+        'DDOS': {
+            'damage': 'CRITICAL', 'color': '#ff3c5a',
+            'impact': 'Server crash / complete outage',
+            'speed': 'Immediate — seconds to minutes',
+            'example': 'Your website goes completely offline',
+            'mitigation': 'Rate limiting, traffic filtering, CDN protection'
+        },
+        'BRUTEFORCE': {
+            'damage': 'HIGH', 'color': '#ff8c00',
+            'impact': 'Account takeover / data breach',
+            'speed': 'Minutes to hours',
+            'example': 'Hacker gains admin access to your system',
+            'mitigation': 'Multi-factor authentication, account lockout policy'
+        },
+        'PORTSCAN': {
+            'damage': 'MEDIUM', 'color': '#ffe033',
+            'impact': 'Network mapping / reconnaissance',
+            'speed': 'No immediate damage — prep for bigger attack',
+            'example': 'Hacker finds your weak spots before attacking',
+            'mitigation': 'Close unused ports, firewall rules'
+        },
+        'BOT': {
+            'damage': 'HIGH', 'color': '#b44dff',
+            'impact': 'Data theft / spam / crypto mining',
+            'speed': 'Slow — days to weeks undetected',
+            'example': 'Your server secretly mining crypto for hacker',
+            'mitigation': 'Endpoint protection, behavior monitoring'
+        },
+        'BENIGN': {
+            'damage': 'NONE', 'color': '#00e5a0',
+            'impact': 'No damage',
+            'speed': 'N/A',
+            'example': 'Normal user browsing your website',
+            'mitigation': 'No action needed'
+        }
+    }
+
+    info = damage_info.get(pred_label.upper(), damage_info['BENIGN'])
+
     if pred_label.upper() == 'BENIGN':
         st.markdown(f"""
         <div class='detect-result-safe'>
@@ -622,15 +680,68 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
     else:
-        threat_color = "#ff3c5a" if pred_label.upper() in ['DDOS','BRUTEFORCE'] else "#ff8c00"
+        threat_color = info['color']
         st.markdown(f"""
         <div class='detect-result-danger'>
-            <div style='font-family:Orbitron,monospace; font-size:1.6rem; color:{threat_color}; letter-spacing:0.08em;'>🚨 ATTACK DETECTED: {pred_label.upper()}</div>
+            <div style='font-family:Orbitron,monospace; font-size:1.6rem; color:{threat_color}; letter-spacing:0.08em;'>
+                🚨 ATTACK DETECTED: {pred_label.upper()}
+            </div>
             <div style='font-family:JetBrains Mono,monospace; color:#7a95b8; margin-top:10px; font-size:0.85rem;'>
                 Confidence: <span style='color:{threat_color};'>{confidence:.1f}%</span> · Threat signature matched · Connection blocked
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    if pred_label.upper() != 'BENIGN':
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="ng-header">💥 Damage Assessment</div>', unsafe_allow_html=True)
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='value' style='color:{info["color"]}; font-size:1.2rem;'>{info["damage"]}</div>
+                <div class='label'>Damage Level</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with d2:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='value' style='color:{info["color"]}; font-size:0.9rem;'>{info["impact"]}</div>
+                <div class='label'>Impact</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with d3:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='value' style='color:#38b6ff; font-size:0.9rem;'>{info["speed"]}</div>
+                <div class='label'>Attack Speed</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_ex, col_fix = st.columns(2)
+        with col_ex:
+            st.markdown(f"""
+            <div style='background:#0f1828; border:1px solid {info["color"]}33;
+                        border-left:3px solid {info["color"]}; border-radius:8px; padding:16px;'>
+                <div style='font-family:Orbitron,monospace; color:{info["color"]}; font-size:0.7rem;
+                            letter-spacing:0.15em; margin-bottom:8px;'>⚠️ REAL WORLD EXAMPLE</div>
+                <div style='font-family:JetBrains Mono,monospace; color:#d4e0f0; font-size:0.82rem;'>
+                    {info["example"]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_fix:
+            st.markdown(f"""
+            <div style='background:#0f1828; border:1px solid #00e5a033;
+                        border-left:3px solid #00e5a0; border-radius:8px; padding:16px;'>
+                <div style='font-family:Orbitron,monospace; color:#00e5a0; font-size:0.7rem;
+                            letter-spacing:0.15em; margin-bottom:8px;'>🛡️ HOW TO STOP IT</div>
+                <div style='font-family:JetBrains Mono,monospace; color:#d4e0f0; font-size:0.82rem;'>
+                    {info["mitigation"]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     prob_df = pd.DataFrame({'Type': le.classes_, 'Probability': probs}).sort_values('Probability', ascending=True)
@@ -667,7 +778,6 @@ with tab3:
 
     st.markdown("<br>", unsafe_allow_html=True)
     col_l, col_r = st.columns(2)
-
     with col_l:
         labels  = le.classes_
         cm_pct  = cm.astype(float) / (cm.sum(axis=1, keepdims=True) + 1e-9)
@@ -685,7 +795,6 @@ with tab3:
             **{k:v for k,v in DARK_LAYOUT.items() if k not in ['xaxis','yaxis']}, height=380,
         )
         st.plotly_chart(fig_cm, use_container_width=True)
-
     with col_r:
         fig_fi = go.Figure(go.Bar(
             x=fi.head(12)['importance'], y=fi.head(12)['feature'], orientation='h',
@@ -768,7 +877,7 @@ with tab4:
         sample_df, x=x_feat, y=y_feat, color='label',
         color_discrete_map=COLORS, opacity=0.65,
         size=sz_vals if sz_feat != '(none)' else None,
-        title=f"{x_feat} vs {y_feat}" + (f" (size={sz_feat})" if sz_feat != '(none)' else ""),
+        title=f"{x_feat} vs {y_feat}",
     )
     fig_scatter.update_layout(
         title=dict(font=dict(color='#00e5a0', family='Orbitron', size=13)),
