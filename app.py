@@ -11,6 +11,7 @@ from sklearn.preprocessing import LabelEncoder
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import os
 import warnings
 import random
 import time
@@ -487,15 +488,25 @@ with tab1:
     attack_types = [l for l in label_counts.index if l.upper() != 'BENIGN']
     if attack_types:
         rng = random.Random(int(time.time() // 30) if auto_refresh else 42)
-        protocols = ['TCP','UDP','ICMP','HTTP','HTTPS','DNS','FTP','SSH']
-        countries = ['CN','RU','US','DE','BR','KR','UA','NL']
+        protocols  = ['TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'FTP', 'SSH']
+
+        @st.cache_data(ttl=3600)
+        def get_country(ip):
+            try:
+                import geoip2.database
+                db_path = os.path.join(os.path.dirname(__file__), 'GeoLite2-Country.mmdb')
+                with geoip2.database.Reader(db_path) as reader:
+                    response = reader.country(ip)
+                    return response.country.name or 'Unknown'
+            except:
+                return 'Unknown'
         for i in range(10):
             attack  = rng.choice(attack_types)
             src_ip  = f"{rng.randint(1,223)}.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}"
             dst_ip  = f"10.0.{rng.randint(1,10)}.{rng.randint(1,50)}"
             port    = rng.choice([80,443,22,21,3389,8080,53,445])
             proto   = rng.choice(protocols)
-            country = rng.choice(countries)
+            country = get_country(src_ip)
             ts      = (datetime.now() - timedelta(seconds=rng.randint(0,300))).strftime("%H:%M:%S")
             if attack.upper() == 'DDOS':
                 sev, badge_cls, color = "CRITICAL", "badge-critical", "#ff3c5a"
