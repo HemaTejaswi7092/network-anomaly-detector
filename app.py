@@ -494,7 +494,7 @@ with tab1:
         def get_country(ip):
             try:
                 import geoip2.database
-                db_path = os.path.join(os.path.dirname(__file__), 'GeoLite2-Country.mmdb')
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'GeoLite2-Country.mmdb')
                 with geoip2.database.Reader(db_path) as reader:
                     response = reader.country(ip)
                     return response.country.name or 'Unknown'
